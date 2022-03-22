@@ -7,31 +7,25 @@ import os
 
 class NFT_Downloader:
     """This class provides a method by which you can download the images of non-fungible tokens from the blockchain. This class requires you to have an Etherscan api key and an Infura project (both freely available).
-    
+
     Attributes
     ---
-    DEFAULT_IPFS_PREFIX: str
-        The link to the ipfs site
+    etherscan_key: str
+        Your key to the Etherscan api.
+    infura_link: str
+        The link to your Infura project.
 
     Methods
     ---
-    connect_to_web3()
-        Connects to Web 3.0 using your infura link.
-    get_abi(address)
-        Gets the abi for the given wallet address.
-    get_tokens(address)
-        Get token IDs from the given wallet address.
-    correct_link(link)
-        A helper function which removes the 'ipfs://' prefix in some links.
-    download_image(image_link, download_path, extension = "")
-        Downloads the image at the specified link.
-    get_image(image_link, download_path)
-        A recursive function which searches through a page's JSON data to find the true link to an image.
     download_nfts(addresses, download_dir, download_cap = 100, create_dirs = True)
         Download NFTs from specified wallets.
+    set_etherscan_key(key)
+        Set the Etherscan api key.
+    set_infura_link(link)
+        Set the Infura project link.
     """
 
-    DEFAULT_IPFS_PREFIX = 'https://ipfs.io/ipfs/'
+    _DEFAULT_IPFS_PREFIX = 'https://ipfs.io/ipfs/'
 
     def __init__(self, etherscan_key: str, infura_link: str):
         """
@@ -46,10 +40,8 @@ class NFT_Downloader:
         self.etherscan_key = etherscan_key
         self.infura_link = infura_link
 
-    def connect_to_web3(self) -> tuple:
+    def __connect_to_web3(self) -> tuple:
         """Connects to Web 3.0 using your infura link.
-
-        Must be called before calling download_nfts().
 
         Returns
         ---
@@ -60,7 +52,7 @@ class NFT_Downloader:
         w3 = Web3(HTTPProvider(self.infura_link))
         return w3, w3.isConnected()
 
-    def get_abi(self, address: str) -> tuple:
+    def __get_abi(self, address: str) -> tuple:
         """Gets the abi for the given wallet address.
 
         Parameters
@@ -78,7 +70,7 @@ class NFT_Downloader:
         req = requests.get(req_link)
         return json.loads(req.json()['result']), req.status_code == 200
 
-    def get_tokens(self, address: str) -> list:
+    def __get_tokens(self, address: str) -> list:
         """Returns a list of token IDs from the specified wallet address.
 
         Parameters
@@ -103,7 +95,7 @@ class NFT_Downloader:
         else:
             return []
 
-    def correct_link(self, link: str) -> str:
+    def __correct_link(self, link: str) -> str:
         """A helper function which removes the 'ipfs://' prefix in some links.
 
         Parameters
@@ -114,12 +106,12 @@ class NFT_Downloader:
         Returns
         ---
         str
-            A new link
+            A new link without the 'ipfs://' prefix.
         """
 
-        return link.replace('ipfs://', DEFAULT_IPFS_PREFIX)
+        return link.replace('ipfs://', self._DEFAULT_IPFS_PREFIX)
 
-    def download_image(self, image_link: str, download_path: str, extension: str = "") -> None:
+    def __download_image(self, image_link: str, download_path: str, extension: str = "") -> None:
         """Downloads the image at the specified link.
 
         Parameters
@@ -147,7 +139,7 @@ class NFT_Downloader:
         else:
             print('Error: could not connect to ' + image_link + ', status code ' + str(req.status_code))
 
-    def get_image(self, image_link: str, download_path: str) -> None:
+    def __get_image(self, image_link: str, download_path: str) -> None:
         """A recursive function which searches through a page's JSON data to find the true link to an image.
 
         Parameters
@@ -160,16 +152,16 @@ class NFT_Downloader:
 
         req = requests.get(image_link, stream=True)
         if (req.status_code == 200):
-            if (image_link.endswith('.png') or image_link.endswith('.jpg') or image_link.endswith('.jpeg')):
-                download_image(correct_link(image_link), download_path)
+            if (image_link.endswith('.png') or image_link.endswith('.jpg') or image_link.endswith('.jpeg') or image_link.endswith('.gif')):
+                self.__download_image(self.__correct_link(image_link), download_path)
                 return
             else:
                 try:
                     nftJSON = req.json()
                     jsonLink = str(nftJSON['image'])
-                    return get_image(correct_link(jsonLink), download_path)
+                    return self.__get_image(self.__correct_link(jsonLink), download_path)
                 except Exception:
-                    download_image(correct_link(image_link), download_path, '.png')
+                    self.__download_image(self.__correct_link(image_link), download_path, '.png')
         else:
             print('Error: could not connect to ' + image_link + ', status code ' + str(req.status_code))
 
@@ -193,18 +185,18 @@ class NFT_Downloader:
             Whether the NFTs successfully downloaded.
         """
 
-        w3, connected = self.connect_to_web3()
+        w3, connected = self.__connect_to_web3()
         if not connected:
             print('Error: could not connect to Web3, please check your internet connection and try again.')
             return False
 
         # Iterate over all addresses
         for address in addresses:
-            abi, got_abi = self.get_abi(address)
+            abi, got_abi = self.__get_abi(address)
             if not got_abi:
                 print('Error: could not get ABI from specified wallet ' + address + '.')
                 continue
-            tokens, got_tokens = self.get_tokens(address)
+            tokens, got_tokens = self.__get_tokens(address)
             if not got_tokens:
                 print('Error: could not get token IDs from the specified wallet ' + address + '.')
                 continue
@@ -232,7 +224,13 @@ class NFT_Downloader:
                     image_link = str(contract.functions.imageURI(tokens[i]).call())
 
                     print('Attempting download of token ID #%i from %s.', tokens[i], image_link)
-                    self.get_image(self.correct_link(image_link), dir)
+                    self.__get_image(self.__correct_link(image_link), dir)
                 except Exception as e:
                     print(e)
         return True
+
+    def set_etherscan_key(self, key: str) -> None:
+        self.etherscan_key = key
+    
+    def set_infura_link(self, link: str) -> None:
+        self.infura_link = link
